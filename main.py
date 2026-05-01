@@ -1,4 +1,14 @@
+import os
+import asyncio
+from dotenv import load_dotenv
+
 from llm.connect import LLM
+from comm.telegram_bot import TelegramBot, run_bot
+
+load_dotenv()  # Load environment variables from .env file
+
+
+bot = TelegramBot(token=os.getenv("TELEGRAM_BOT_TOKEN"))
 
 def main():
     print("Hello from sevak!")
@@ -14,5 +24,12 @@ def main():
             print(f"Ram Prakash: {response.content}")
 
 
+@bot.on_message()
+async def greet(update, context):
+    await update.message.reply_text(f"Hello, {update.effective_user.first_name}!")
+
+
 if __name__ == "__main__":
-    main()
+    # main()
+    asyncio.run(run_bot(bot))
+
