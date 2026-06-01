@@ -1,6 +1,6 @@
 # Sevak
 
-name = "Ram Prakash"
+name = "Diti"
 
 ## Intrduction
 This is a project for my own use case. This is supposed to be the assistant that I have been trying to build for so long, what got me into programming. 
