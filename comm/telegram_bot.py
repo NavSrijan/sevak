@@ -37,6 +37,8 @@ from telegram.ext import (
     filters,
 )
 
+from comm.handlers import register_handlers # Custom handler registration function
+
 logger = logging.getLogger(__name__)
 
 
@@ -160,54 +162,27 @@ class TelegramBot:
         logger.info("Bot stopped.")
 
 
-async def run_bot(bot):
+async def run_bot(bot, bot_data: dict = {}):
     app = bot.build()
+    register_handlers(app) 
+
+    app.bot_data.update(bot_data)  
+
     await app.initialize()
     await app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
     await app.start()
+    logger.info("Telegram bot polling started.")
 
     stop_event = asyncio.Event()
 
     try:
         await stop_event.wait()  # Run until externally stopped
-    except (KeyboardInterrupt, SystemExit):
+    except (KeyboardInterrupt, SystemExit, asyncio.CancelledError):
         pass
     finally:
+        if app.updater and app.updater.running:
+            await app.updater.stop()
         await app.stop()
         await app.shutdown()
 
-# ------------------------------------------------------------------
-# Example — run directly: python telegram_bot.py
-# ------------------------------------------------------------------
-
-if __name__ == "__main__":
-    import os
-
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    )
-
-    TOKEN = os.environ.get("TELEGRAM_TOKEN", "YOUR_TOKEN_HERE")
-    bot = TelegramBot(token=TOKEN)
-
-    @bot.on_command("start")
-    async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        await update.message.reply_text(
-            f"Hello, {update.effective_user.first_name}! I'm alive."
-        )
-
-    @bot.on_command("help")
-    async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        await update.message.reply_text("Commands: /start, /help")
-
-    @bot.on_message()
-    async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        await update.message.reply_text(f"You said: {update.message.text}")
-
-    @bot.on_error
-    async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
-        logger.error("Unhandled error: %s", context.error, exc_info=context.error)
-
-    bot.run()
 
