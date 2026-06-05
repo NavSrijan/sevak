@@ -1,108 +1,102 @@
-import asyncio
 import logging
-from dataclasses import dataclass
-from typing import Optional
-
-from dotenv import load_dotenv
-from pydantic_ai import Agent
-from pydantic_ai.capabilities import ReinjectSystemPrompt
+import httpx
+import os
+from datetime import datetime
+from typing import Any
+from pydantic import BaseModel, PrivateAttr
+from pydantic_ai import Agent, UsageLimits, ModelMessagesTypeAdapter
 from pydantic_ai.models.ollama import OllamaModel
 from pydantic_ai.providers.ollama import OllamaProvider
 from pydantic_ai.settings import ModelSettings
 
 from prompts.system_prompt import SYSTEM_PROMPT
 from utils.helpers import to_uuid
-from llm.memory import MemoryManager
-
-load_dotenv()
+import config
 
 logger = logging.getLogger(__name__)
 
-settings: ModelSettings = {
-    "think": False,
-    "max_tokens": 1024,
-    "temperature": 0.7,
-    "top_p": 0.9,
-}
+SETTINGS = ModelSettings(
+    response_format={"type": "json_object"},
+    **config.LLM_SETTINGS
+)
 
+# Share client
+http_client = httpx.AsyncClient()
 
-def _make_agent(system_prompt: str) -> Agent[str]:
-    """Create the base PydanticAI agent."""
-    model = OllamaModel(
-        "granite4.1:3b",
-        provider=OllamaProvider(base_url="http://localhost:11434/v1"),
-    )
-    return Agent(
-        model=model,
-        system_prompt=system_prompt,
-        capabilities=[ReinjectSystemPrompt()],
-    )
-
-
-@dataclass
-class LLMResponse:
+class LLMResponse(BaseModel):
     content: str
-    raw: object
+    
+    _raw: Any = PrivateAttr(default=None)
 
+    @property
+    def raw(self) -> Any:
+        return self._raw
+
+    @raw.setter
+    def raw(self, value: Any):
+        self._raw = value
 
 class LLM:
-    def __init__(self, name: str = "Diti", history: bool = True, system_prompt: str | None = None):
+    def __init__(self, name: str = config.DEFAULT_BOT_NAME, history: bool = True, system_prompt: str | None = None):
         self.name = name
         self.history = history
         self.system_prompt = system_prompt or SYSTEM_PROMPT.format(name=name)
-        self.agent = _make_agent(self.system_prompt)
-        self.memory: Optional[MemoryManager] = None
+        
+        self.model = OllamaModel(
+            config.LLM_MODEL,
+            provider=OllamaProvider(
+                base_url=config.OLLAMA_BASE_URL,
+                http_client=http_client
+            ),
+        )
+        
+        # Define a single, static agent using structured output and settings
+        self.agent = Agent(
+            model=self.model,
+            output_type=LLMResponse,
+            model_settings=SETTINGS,
+            retries=3,
+        )
 
-    @classmethod
-    async def create(
-        cls,
-        name: str = "Diti",
-        history: bool = True,
-        system_prompt: str | None = None,
-    ) -> "LLM":
-        """Asynchronous factory method to create an instance of LLM."""
-        instance = cls(name=name, history=history, system_prompt=system_prompt)
-        await instance._async_init()
-        return instance
-
-    async def _async_init(self) -> None:
-        """Initialize async resources."""
-        if self.history:
-            self.memory = MemoryManager(self.system_prompt)
-            await self.memory.initialize()
-
-    async def aclose(self) -> None:
-        """Close the dedicated history connection."""
-        if self.memory:
-            await self.memory.aclose()
-
-    def get_chain(self) -> Agent[str]:
+    def get_agent(self) -> Agent[LLMResponse]:
         """Return the underlying agent, useful for testing."""
         return self.agent
 
-    async def invoke(self, input: str, session_id: str, system_prompt: str | None = None) -> LLMResponse:
-        message_history = []
-        stored_system_prompt = None
-
-        if self.memory:
-            message_history, stored_system_prompt = await self.memory.load_history(session_id)
-
-        # Resolve active system prompt: explicitly passed, stored in DB, or default
-        active_system_prompt = system_prompt or stored_system_prompt or self.system_prompt
-
-        run_agent = self.agent if active_system_prompt == self.system_prompt else _make_agent(active_system_prompt)
-        result = await run_agent.run(
-            input,
-            message_history=message_history,
-            conversation_id=to_uuid(session_id),
-            model_settings=settings,
+    async def invoke(self, input_text: str, system_prompt: str | None = None) -> LLMResponse:
+        """Invoke the agent without history."""
+        resolved_prompt = system_prompt or self.system_prompt
+        json_prompt = f"{resolved_prompt}\n\nYou MUST return a JSON object with a single string field 'content' containing your response text. Do not output anything other than raw valid JSON."
+        result = await self.agent.run(
+            input_text,
+            instructions=json_prompt,
+            usage_limits=UsageLimits(request_limit=10),
         )
+        response = result.output
+        response.raw = result
+        return response
 
-        if self.memory:
-            await self.memory.save_history(session_id, result.all_messages(), system_prompt=active_system_prompt)
-
-        return LLMResponse(content=result.output, raw=result)
-
-
-if __name__ == "__main__":
-    pass
+    async def invoke_with_memory(
+        self,
+        input_text: str,
+        session_id: str,
+        message_history: list,
+        resolved_prompt: str
+    ) -> LLMResponse:
+        """Runs the agent with explicit pre-loaded history and a resolved prompt."""
+        try:
+            validated_history = ModelMessagesTypeAdapter.validate_python(message_history)
+        except Exception as e:
+            logger.warning("Failed to validate message history: %s. Starting with empty history.", e)
+            validated_history = []
+            
+        json_prompt = f"{resolved_prompt}\n\nYou MUST return a JSON object with a single string field 'content' containing your response text. Do not output anything other than raw valid JSON."
+        result = await self.agent.run(
+            input_text,
+            message_history=validated_history,
+            instructions=json_prompt,
+            conversation_id=to_uuid(session_id),
+            usage_limits=UsageLimits(request_limit=10),
+        )
+        response = result.output
+        response.raw = result
+        return response

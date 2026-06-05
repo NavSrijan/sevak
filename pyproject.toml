@@ -17,6 +17,7 @@ dependencies = [
     "langgraph-checkpoint-postgres>=3.0.5",
     "pydantic-ai>=1.89.1",
     "pydantic-ai-slim[duckduckgo,web]>=1.89.1",
+    "pydantic-graph>=1.89.1",
     "python-dotenv>=1.2.2",
     "python-telegram-bot>=22.7",
     "requests>=2.33.1",

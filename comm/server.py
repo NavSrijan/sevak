@@ -24,7 +24,6 @@ async def message(req: Request):
     logger.info(f"Terminal: {user_input}")
     task = {
             "source": "terminal",
-            "session_id": os.getenv("SESSION_ID", "nav"),
             "text": user_input,
             "reply_func": reply_func,
             }

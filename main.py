@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 
 from llm.connect_v2 import LLM
-from llm.worker import llm_worker
+from llm.worker import Pipeline, llm_worker
 
 from comm.telegram_bot import TelegramBot, run_bot
 from comm.server import app
@@ -32,7 +32,9 @@ async def main():
             engine, class_=AsyncSession, expire_on_commit=False
         )
 
-    llm = await LLM.create()
+    llm = LLM()
+    pipeline = Pipeline(llm)
+    await pipeline.initialize()
 
     bot = TelegramBot(token=os.getenv("TELEGRAM_BOT_TOKEN"))
     bot_data = {}
@@ -47,10 +49,10 @@ async def main():
         await asyncio.gather(
                 server.serve(),
                 run_bot(bot, bot_data),
-                llm_worker(input_queue, llm)
+                llm_worker(input_queue, pipeline)
             )
     finally:
-        await llm.aclose()
+        await pipeline.aclose()
         await db.disconnect()
 
 

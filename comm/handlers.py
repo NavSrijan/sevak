@@ -29,7 +29,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     task = {
             "source": "telegram",
-            "session_id": os.getenv("SESSION_ID", "nav"),
             "text": user_input,
             "reply_func": reply_func,
             }

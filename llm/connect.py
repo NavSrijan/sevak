@@ -9,17 +9,19 @@ from langchain_postgres import PostgresChatMessageHistory, PGEngine
 from langchain_core.globals import set_debug
 
 from prompts.system_prompt import SYSTEM_PROMPT
+import config
 
 # set_debug(True)
 
 class LLM():
-    def __init__(self, name="Diti", history=True, system_prompt=None):
+    def __init__(self, name=config.DEFAULT_BOT_NAME, history=True, system_prompt=None):
         self.name = name
         self.history_messages_key = "history"
         self.llm = ChatOllama(
-                model="granite4.1:3b",
-                temperature=0.9,
-                top_p=0.95,
+                model=config.LLM_MODEL,
+                base_url=config.OLLAMA_BASE_URL,
+                temperature=config.LLM_SETTINGS.get("temperature", 0.7),
+                top_p=config.LLM_SETTINGS.get("top_p", 0.9),
                 top_k=64,
                 reasoning=False,
                 # seed=1
@@ -83,7 +85,7 @@ class LLM():
         """Returns the chain, useful for testing."""
         return self.wrapped_chain
 
-    async def invoke(self, input: str, session_id: str, system_prompt: str = None):
+    async def invoke_with_history(self, input: str, session_id: str, system_prompt: str = None):
         config = {"configurable": {"session_id": to_uuid(session_id)}}
 
         return await self.wrapped_chain.ainvoke(

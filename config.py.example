@@ -1,0 +1,28 @@
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Database Config
+PG_DATABASE_URL = os.getenv("PG_DATABASE_URL", "postgresql+psycopg_async://postgres:postgrespassword@localhost:5433/sevak")
+PG_DIRECT_URL = os.getenv("PG_DIRECT_URL", "postgresql://postgres:postgrespassword@localhost:5433/sevak")
+
+# Telegram Config
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "YOUR_TELEGRAM_BOT_TOKEN_HERE")
+
+# Ollama Config
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", "no-api-key")
+
+# Model Configuration
+LLM_MODEL = "granite-16k:latest"
+LLM_SETTINGS = {
+    "think": False,
+    "max_tokens": 1024,
+    "temperature": 0.7,
+    "top_p": 0.9,
+}
+
+# Bot Default Info
+DEFAULT_BOT_NAME = "Diti"

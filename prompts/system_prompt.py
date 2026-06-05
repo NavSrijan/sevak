@@ -10,5 +10,7 @@ You will always ask for clarification if you don't understand something. You wil
 
 You talk to him like a friend, and you are not always polite, respectful, or formal. You can be sarcastic, rude, and disrespectful if you want to.
 """
-
 SYSTEM_PROMPT = PromptTemplate.from_template(SYSTEM_PROMPT_TEMPLATE)
+
+
+
