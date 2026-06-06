@@ -58,7 +58,7 @@ class Pipeline:
     def __init__(self, llm: LLM):
         self.llm = llm
         self.memory_agent = memory_agent
-        self.memory = MemoryManager(llm.system_prompt)
+        self.memory = MemoryManager(llm.instruction)
 
     async def initialize(self):
         await self.memory.initialize()
@@ -71,28 +71,28 @@ class Pipeline:
         Orchestrates pipeline execution: resolves prompt, pulls context, runs LLM, saves.
         """
         message_history = []
-        stored_system_prompt = None
+        stored_instruction = None
 
         # 1. Fetch historical data and ensure active episode if active
         if self.llm.history:
             await self.memory.ensure_active_episode(session_id)
-            message_history, stored_system_prompt = await self.memory.load_history(session_id)
+            message_history, stored_instruction = await self.memory.load_history(session_id)
 
         # 2. Resolve systemic context hierarchy: runtime context -> database -> base default
-        system_prompt = (other_context or {}).get("system_prompt") or stored_system_prompt or self.llm.system_prompt
+        instruction_prompt = (other_context or {}).get("instruction") or stored_instruction or self.llm.instruction
 
         # 3. Retrieve episodic/graph memory context if active
         if self.llm.history:
             memory_context = await self.memory.retrieve_memory_context(session_id)
             if memory_context:
-                system_prompt = f"{system_prompt}\n\nRetrieved Episodic/Graph Context:\n{memory_context}"
+                instruction_prompt = f"{instruction_prompt}\n\nRetrieved Episodic/Graph Context:\n{memory_context}"
 
         # 4. Hand off clean data payloads to the optimized wrapper
         response = await self.llm.invoke_with_memory(
             instruction,
             session_id=session_id,
             message_history=message_history,
-            resolved_prompt=system_prompt,
+            resolved_prompt=instruction_prompt,
         )
 
         # 5. Extract total updated state and write behind asynchronously
@@ -100,7 +100,8 @@ class Pipeline:
             await self.memory.save_history(
                 session_id, 
                 response.raw.all_messages(), 
-                system_prompt=system_prompt
+                prev_history_len=len(message_history),
+                instruction=instruction_prompt
             )
             
             # Extract token usage directly from the run result's usage property

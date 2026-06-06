@@ -53,10 +53,7 @@ class ChatHistory(SQLModel, table=True):
     session_id: uuid.UUID = Field(
         sa_column=Column(pgUUID(as_uuid=True), nullable=False, index=True)
     )
-    request: dict = Field(
-        sa_column=Column(JSONB, nullable=False)
-    )
-    response: dict = Field(
+    payload: list = Field(
         sa_column=Column(JSONB, nullable=False)
     )
     
@@ -140,7 +137,6 @@ class EntityTaxonomy(SQLModel, table=True):
     )
     description: str = Field(sa_column=Column(Text, nullable=False))
 
-
 class MemoryEntity(SQLModel, table=True):
     """Mapped from Graph Memory-entity block in image_998ce0.png"""
     __tablename__ = "memory_entities"
@@ -163,11 +159,6 @@ class MemoryEntity(SQLModel, table=True):
         sa_column=Column(Vector(768), nullable=True),
     )
     
-    # Attributes JSONB (Used to compile text profile)
-    attributes: dict = Field(
-        default_factory=dict,
-        sa_column=Column(JSONB, nullable=False, server_default="'{}'::jsonb"),
-    )
     confidence: float = Field(
         default=1.0, sa_column=Column(Float, nullable=False, server_default="1.0")  # Float [0->1]
     )
@@ -180,28 +171,64 @@ class MemoryEntity(SQLModel, table=True):
         sa_column=Column(DateTime(timezone=True), nullable=False),
     )
 
-
-class MemoryRelation(SQLModel, table=True):
-    """Mapped from Memory-relations block in image_998ce0.png"""
-    __tablename__ = "memory_relations"
+class Predicates(SQLModel, table=True):
+    """Predicates for entities"""
+    __tablename__ = "predicates"
 
     id: uuid.UUID = Field(
         default_factory=uuid.uuid4,
-        sa_column=Column(pgUUID(as_uuid=True), primary_key=True),  # (PK)
+        sa_column=Column(pgUUID(as_uuid=True), primary_key=True),
     )
-    
-    # Target and Source Entity links
-    source_id: uuid.UUID = Field(
-        sa_column=Column(pgUUID(as_uuid=True), ForeignKey("memory_entities.id"), nullable=False)  # (FK)
+
+    predicate: str = Field(sa_column=Column(Text, nullable=False))
+
+    usage_count: int = Field(
+        default=1, sa_column=Column(Integer, nullable=False, server_default="1")
     )
-    target_id: uuid.UUID = Field(
-        sa_column=Column(pgUUID(as_uuid=True), ForeignKey("memory_entities.id"), nullable=False)  # (FK)
+    description: str = Field(sa_column=Column(Text, nullable=True))
+    embedding: list[float] | None = Field(
+        default=None,
+        sa_column=Column(Vector(768), nullable=True),
     )
-    
-    relation_type: str = Field(sa_column=Column(Text, nullable=False, index=True))
-    description: str = Field(sa_column=Column(Text, nullable=False))
-    
-    # Grounded lineage link to the originating Episode
+
+    last_updated: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+
+class EntityFacts(SQLModel, table=True):
+    """Facets for entities"""
+    __tablename__ = "entity_facts"
+
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        sa_column=Column(pgUUID(as_uuid=True), primary_key=True),
+    )
+
+    entity_id: uuid.UUID = Field(
+        sa_column=Column(pgUUID(as_uuid=True), ForeignKey("memory_entities.id"), nullable=False)
+    )
+
+    predicate_id: uuid.UUID = Field(
+        sa_column=Column(pgUUID(as_uuid=True), ForeignKey("predicates.id"), nullable=False)
+    )
+
+    value_json: dict = Field(
+        sa_column=Column(JSONB, nullable=False, server_default="'{}'::jsonb"),
+    )
+
+    target_entity_id: uuid.UUID | None = Field(
+        default=None,
+        sa_column=Column(pgUUID(as_uuid=True), ForeignKey("memory_entities.id"), nullable=True)
+    )
+
+    confidence: float = Field(
+        default=0.5, sa_column=Column(Float, nullable=False, server_default="0.5")  # Float [0->1]
+    )
     source_episode_id: uuid.UUID = Field(
         sa_column=Column(pgUUID(as_uuid=True), ForeignKey("episodes.id"), nullable=False)  # (FK)
     )
@@ -212,8 +239,14 @@ class MemoryRelation(SQLModel, table=True):
     valid_until: datetime | None = Field(
         default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
     )
-    confidence: float = Field(
-        default=0.5, sa_column=Column(Float, nullable=False, server_default="0.5")  # Float [0->1]
+
+    last_updated: datetime = Field(
+            default_factory=lambda: datetime.now(timezone.utc),
+            sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    created_at: datetime = Field(
+            default_factory=lambda: datetime.now(timezone.utc),
+            sa_column=Column(DateTime(timezone=True), nullable=False),
     )
 
 

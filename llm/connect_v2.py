@@ -9,7 +9,7 @@ from pydantic_ai.models.ollama import OllamaModel
 from pydantic_ai.providers.ollama import OllamaProvider
 from pydantic_ai.settings import ModelSettings
 
-from prompts.system_prompt import SYSTEM_PROMPT
+from prompts.instruction import INSTRUCTION
 from utils.helpers import to_uuid
 import config
 
@@ -37,10 +37,10 @@ class LLMResponse(BaseModel):
         self._raw = value
 
 class LLM:
-    def __init__(self, name: str = config.DEFAULT_BOT_NAME, history: bool = True, system_prompt: str | None = None):
+    def __init__(self, name: str = config.DEFAULT_BOT_NAME, history: bool = True, instruction: str | None = None):
         self.name = name
         self.history = history
-        self.system_prompt = system_prompt or SYSTEM_PROMPT.format(name=name)
+        self.instruction = instruction or INSTRUCTION.format(name=name)
         
         self.model = OllamaModel(
             config.LLM_MODEL,
@@ -62,10 +62,10 @@ class LLM:
         """Return the underlying agent, useful for testing."""
         return self.agent
 
-    async def invoke(self, input_text: str, system_prompt: str | None = None) -> LLMResponse:
+    async def invoke(self, input_text: str, instruction: str | None = None) -> LLMResponse:
         """Invoke the agent without history."""
-        resolved_prompt = system_prompt or self.system_prompt
-        json_prompt = f"{resolved_prompt}\n\nYou MUST return a JSON object with a single string field 'content' containing your response text. Do not output anything other than raw valid JSON."
+        resolved_instruction = instruction or self.instruction
+        json_prompt = f"{resolved_instruction}\n\nYou MUST return a JSON object with a single string field 'content' containing your response text. Do not output anything other than raw valid JSON."
         result = await self.agent.run(
             input_text,
             instructions=json_prompt,
